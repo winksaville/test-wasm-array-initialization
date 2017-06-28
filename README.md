@@ -1,6 +1,6 @@
 # Test wasm compile time array initialization
 
-There is a bug initializing arrays with structures such as below `gBd` below:
+There is a bug initializing arrays with structures such as `gBd` below:
 ```
 struct bd {
   char d;
@@ -11,7 +11,7 @@ static struct bd gBd[2] = {{1}, {2}};
 static char gU8[2] = {3, 4};
 ```
 When compiling `mem.c` is complied with clang with `--target=wasm32` and using the
-cc -> llc -> s2wasm -> wast2wasm tool chain the data section is the expected
+clang -> llc -> s2wasm -> wast2wasm toolchain the data section is the expected
 output in the mem.c.wast file. Specifically the byte values are in consecutive
 addresses:
 ```
@@ -60,6 +60,45 @@ get_gU8Addr: val
 7:           get_gU8(1)=4
 8:           get_gU8(2)=0
 9:           get_gU8(3)=0
+```
+
+# Simpler example
+
+I've created simpler example, `src/ainit.c` you can run
+`make build.ainit.c.wasm` and see the correct output:
+```
+$ make build.ainit.c.wasm
+/home/wink/prgs/llvmwasm-builder/dist/bin/clang -emit-llvm --target=wasm32 -O3 -Weverything -Werror -std=c11  -DDBG=0 src/ainit.c -c -o out/src/ainit.c.bc
+/home/wink/prgs/llvmwasm-builder/dist/bin/llc -asm-verbose=false out/src/ainit.c.bc -o out/src/ainit.c.s
+/home/wink/prgs/llvmwasm-builder/dist/bin/s2wasm  out/src/ainit.c.s -o out/src/ainit.c.wast
+/home/wink/prgs/llvmwasm-builder/dist/bin/wast2wasm out/src/ainit.c.wast -o out/src/ainit.c.wasm
+```
+And the `out/src/ainit.c.wast` file is:
+```
+$ cat out/src/ainit.c.wast
+(module
+ (table 0 anyfunc)
+ (memory $0 1)
+ (data (i32.const 16) "\01\02")
+ (export "memory" (memory $0))
+)
+
+```
+If you then run `make build.ainit.wasm`
+```
+$ make build.ainit.wasm
+/home/wink/prgs/llvmwasm-builder/dist/bin/clang --target=wasm32-unknown-unknown-wasm -O3 -Weverything -Werror -std=c11  -DDBG=0 src/ainit.c -c -o out/src/ainit.wasm
+/home/wink/prgs/llvmwasm-builder/dist/bin/wasm2wast out/src/ainit.wasm -o out/src/ainit.wast
+```
+You'll see the incorrect results in `out/src/ainit.wast`
+```
+$ cat out/src/ainit.wast
+(module
+  (table (;0;) 0 anyfunc)
+  (memory (;0;) 1)
+  (global (;0;) i32 (i32.const 0))
+  (export "gBd" (global 0))
+  (data (i32.const 0) "\01\00\00\02\00\00"))
 ```
 
 # Prerequistes
@@ -126,3 +165,4 @@ get_gU8Addr: val
 9:           get_gU8(3)=0
 Done in 4.26s.
 ```
+
